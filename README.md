@@ -34,6 +34,11 @@ stand-in for a real handoff queue.
 **Refuse** requires no tool — the model declines directly in its response,
 with a brief explanation and a pointer to the right channel where relevant.
 
+The agent also keeps short-term conversation memory: recent (question,
+answer) pairs from the session are fed back into both retrieval and
+generation, so natural follow-ups ("what about the international one?")
+work without repeating context.
+
 ## Project structure
 
 ```
