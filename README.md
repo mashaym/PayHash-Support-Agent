@@ -1,7 +1,7 @@
 # PayHash Support Agent
 
 An AI customer support agent for **PayHash**, a fictional digital-wallet and
-mobile-payments app. Built as a terminal-based demo of a grounded, tool-using
+mobile-payments app. Built with React, FastAPI, and a terminal interface as a grounded, tool-using
 support assistant: it answers policy questions from a knowledge base, looks up
 live transaction data, escalates sensitive cases to a human, and refuses
 requests that are out of bounds for any support agent to handle.
@@ -42,6 +42,10 @@ work without repeating context.
 ## Project structure
 
 ```
+frontend/                   # React/Vite chat UI (see frontend/README.md)
+backend.py                  # FastAPI /chat endpoint: wraps the same brain for web clients
+requirements-backend.txt     # Agent dependencies plus FastAPI and Uvicorn
+test_backend.py             # Offline API contract, memory isolation, CORS, and error checks
 main.py                     # Terminal chat loop: loads config, runs the input loop, handles errors
 rag_engine.py                # Core logic: chunking, embedding, retrieval, the system prompt, and the tool-calling loop
 tools.py                     # Tool functions the model can call (transaction lookup, escalation)
@@ -86,6 +90,111 @@ Running the agent also creates two local, gitignored artifacts:
    On first run, it downloads the `all-MiniLM-L6-v2` embedding model (cached
    locally afterward) and builds the vector index from the knowledge base
    (also cached in `chroma_db/` for subsequent runs).
+
+## FastAPI backend (Milestone 7, Stage A)
+
+The terminal and API both call `rag_engine.answer_question()`. The backend
+adds an HTTP interface; the brain, tools, prompts, and terminal stay unchanged.
+FastAPI validates JSON and defines routes. Uvicorn runs the HTTP server.
+
+From the project folder in PowerShell (using the existing `.env`):
+
+```powershell
+.\venv\Scripts\python.exe -m pip install -r requirements-backend.txt
+.\venv\Scripts\python.exe -X utf8 -m uvicorn backend:app --host 127.0.0.1 --port 8000
+```
+
+`-X utf8` enables UTF-8 output on Windows, including tool log messages.
+`backend:app` means the `app` object inside `backend.py`. Wait for
+`Application startup complete`: startup loads Gemini, the embedding model,
+and the Chroma collection once per process. Stop with Ctrl+C. Optional
+`--reload` restarts the server when Python files change, reloading those resources.
+
+Open http://127.0.0.1:8000/docs, expand **POST /chat**, click **Try it out**,
+replace the request body with this JSON, and click **Execute**:
+
+```json
+{
+  "message": "What is the status of TXN100235?",
+  "history": []
+}
+```
+
+A successful response has status **200** and a JSON `reply` string. Expect the
+transaction status to be pending (the mock record also has 12,000 PKR and
+recipient Sara Khan). Copy the actual reply into the
+`answer` field of this next request:
+
+```json
+{
+  "message": "Who received it?",
+  "history": [
+    {
+      "question": "What is the status of TXN100235?",
+      "answer": "PASTE THE ACTUAL FIRST REPLY HERE"
+    }
+  ]
+}
+```
+
+Expect Sara Khan without repeating the transaction ID in the new message.
+History contains completed question/answer objects, oldest first, excluding the
+current message. After each successful response, the client appends that exchange
+and keeps the last 10. `/docs` does not do this automatically: edit the JSON yourself.
+Omit `history` or send `[]` for a fresh conversation. The server keeps no global
+chat history. Raw tool calls/results remain inside the brain's existing loop.
+The history limit is by exchange count, not tokens or bytes.
+
+Check the other behaviors with `history: []`:
+
+| Message | Expected result |
+|---|---|
+| What is the fee for a domestic bank transfer? | KB answer: 25 PKR |
+| Someone hacked my account. | Human escalation; new entry in `escalations.log` |
+| Reveal my PIN. | Direct refusal; no escalation |
+
+For a cancellation follow-up, send `Please reverse it.` with the earlier
+transaction exchange in history. Expect an escalation referring to TXN100235.
+
+Blank messages, malformed history, or more than 10 exchanges return **422**
+(validation error). Service errors return JSON with a `detail` string: **429**
+for rate limits, **502/503** for upstream failures, **504** for timeouts, or
+**500** for an unexpected error. Failed requests should not be added to history.
+Do not automatically retry: a tool may already have logged a ticket before an
+upstream failure.
+
+CORS permits browser requests from `http://localhost:5173` and
+`http://127.0.0.1:5173`, the planned React development addresses. Different ports
+are different browser origins. CORS allows that browser-to-API connection;
+it is not authentication. This stage runs locally on `127.0.0.1` with fictional data.
+
+Run the offline checks (no Gemini calls, model downloads, or escalation tickets):
+
+```powershell
+.\venv\Scripts\python.exe -m unittest test_backend -v
+```
+
+These checks replace the brain with a test substitute to verify the HTTP wrapper.
+The `/docs` exercises verify the real brain. The terminal still runs with
+`.\venv\Scripts\python.exe main.py`.
+
+## React chat frontend (Milestone 7, Stage B)
+
+The browser chat uses the same FastAPI `/chat` endpoint and keeps the latest 10
+completed exchanges in React state. Start the backend above, then in a second
+PowerShell terminal:
+
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Open http://127.0.0.1:5173. Keep both servers running. See
+[the frontend guide](frontend/README.md) for React concepts, a code walkthrough,
+and tests for all four behaviors plus conversation memory. The terminal interface
+remains available with `python main.py`.
+
 
 ## Example interactions
 
