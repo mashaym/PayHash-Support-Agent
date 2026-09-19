@@ -1,0 +1,4 @@
+google-genai==2.24.0
+python-dotenv==1.2.3
+sentence-transformers==6.1.0
+chromadb==1.5.9
