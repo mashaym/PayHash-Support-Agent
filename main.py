@@ -1,5 +1,5 @@
 """
-Terminal chat loop for the PayHash support agent (Milestone 1: RAG answering).
+Terminal chat loop for the PayHash support agent (conversation memory).
 
 Run with: python main.py
 """
@@ -32,8 +32,11 @@ def main():
     print("Opening knowledge base index...")
     collection = rag_engine.get_collection(embed_model)
 
-    print("\nPayHash Support Agent — Milestone 5 (answer + lookup + escalate + refuse)")
+    print("\nPayHash Support Agent — Conversation memory (answer + lookup + escalate + refuse)")
     print("Type a support question, or 'quit' to exit.\n")
+
+    # Session-only memory: store completed exchanges, not tool protocol messages.
+    history: list[tuple[str, str]] = []
 
     while True:
         try:
@@ -49,7 +52,11 @@ def main():
             break
 
         try:
-            answer = rag_engine.answer_question(gemini_client, collection, embed_model, question)
+            answer = rag_engine.answer_question(
+                gemini_client, collection, embed_model, question, history=history
+            )
+            history.append((question, answer))
+            del history[:-rag_engine.MAX_HISTORY_TURNS]
             print(f"Agent: {answer}\n")
         except errors.ClientError as e:
             if e.code == 429:

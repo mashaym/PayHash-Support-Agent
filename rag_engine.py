@@ -135,6 +135,7 @@ AVAILABLE_FUNCTIONS = {
 }
 
 MAX_TOOL_TURNS = 3
+MAX_HISTORY_TURNS = 10  # One turn is a completed (question, answer) pair.
 
 
 def chunk_markdown(text: str) -> list[str]:
@@ -232,8 +233,21 @@ def retrieve(collection, embed_model: SentenceTransformer, question: str, top_k:
     return results["documents"][0]
 
 
-def answer_question(gemini_client, collection, embed_model: SentenceTransformer, question: str) -> str:
-    chunks = retrieve(collection, embed_model, question)
+def answer_question(
+    gemini_client, collection, embed_model: SentenceTransformer, question: str,
+    history: list[tuple[str, str]] | None = None,
+) -> str:
+    """Use completed exchanges as context without modifying session history."""
+    recent_history = (history or [])[-MAX_HISTORY_TURNS:]
+    retrieval_question = question
+    if recent_history:
+        previous_question, previous_answer = recent_history[-1]
+        retrieval_question = (
+            f"Previous question: {previous_question}\n"
+            f"Previous answer: {previous_answer}\n"
+            f"Current question: {question}"
+        )
+    chunks = retrieve(collection, embed_model, retrieval_question)
     context = "\n\n---\n\n".join(chunks)
 
     user_message = f"Context passages:\n\n{context}\n\nQuestion: {question}"
@@ -243,7 +257,12 @@ def answer_question(gemini_client, collection, embed_model: SentenceTransformer,
         tools=[AGENT_TOOLS],
     )
 
-    conversation = [types.Content(role="user", parts=[types.Part(text=user_message)])]
+    # Rebuild a fresh working conversation; tool messages stay local to this answer.
+    conversation = []
+    for previous_question, previous_answer in recent_history:
+        conversation.append(types.Content(role="user", parts=[types.Part(text=previous_question)]))
+        conversation.append(types.Content(role="model", parts=[types.Part(text=previous_answer)]))
+    conversation.append(types.Content(role="user", parts=[types.Part(text=user_message)]))
 
     for _ in range(MAX_TOOL_TURNS):
         response = gemini_client.models.generate_content(
@@ -253,6 +272,8 @@ def answer_question(gemini_client, collection, embed_model: SentenceTransformer,
         )
 
         if not response.function_calls:
+            if not response.text:
+                raise ValueError("The AI service returned an empty answer.")
             return response.text
 
         # The model wants to call a tool. Run the requested function
