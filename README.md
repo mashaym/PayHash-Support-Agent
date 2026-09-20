@@ -46,6 +46,9 @@ frontend/                   # React/Vite chat UI (see frontend/README.md)
 backend.py                  # FastAPI /chat endpoint: wraps the same brain for web clients
 requirements-backend.txt     # Agent dependencies plus FastAPI and Uvicorn
 test_backend.py             # Offline API contract, memory isolation, CORS, and error checks
+evaluate.py                 # Live routing evaluation with tool traces and a no-tool judge
+evaluation_cases.py         # 18 policy-based routing scenarios and expected behaviors
+test_evaluate.py            # Offline checks of the evaluator itself
 main.py                     # Terminal chat loop: loads config, runs the input loop, handles errors
 rag_engine.py                # Core logic: chunking, embedding, retrieval, the system prompt, and the tool-calling loop
 tools.py                     # Tool functions the model can call (transaction lookup, escalation)
@@ -195,6 +198,24 @@ Open http://127.0.0.1:5173. Keep both servers running. See
 and tests for all four behaviors plus conversation memory. The terminal interface
 remains available with `python main.py`.
 
+
+## Routing evaluation (Milestone 8)
+
+Evaluate the same agent brain with 18 policy-based scenarios. Tool executions
+identify lookups and escalations; a separate, fallible Gemini judgment distinguishes
+answers from refusals when no tool executes. The expected label is hidden from
+that judge. Reports include replies and tool arguments/results for inspection.
+
+```powershell
+.\venv\Scripts\python.exe -X utf8 evaluate.py --list
+.\venv\Scripts\python.exe -X utf8 evaluate.py --limit 4
+.\venv\Scripts\python.exe -X utf8 evaluate.py
+```
+
+The last two commands use real Gemini quota. Requests are paced 15 seconds apart,
+and a quota error stops the run. Evaluation tickets and JSON reports live under
+the ignored `eval_results/` directory. See [EVALUATION.md](EVALUATION.md) for the
+test design, scorecard interpretation, targeted reruns, and guardrail notes.
 
 ## Example interactions
 
