@@ -41,12 +41,6 @@ You: Should I invest my savings in crypto?
 Agent: I can't give financial or investment advice. For that, please consult a licensed financial advisor.
 ```
 
-## Screenshot
-
-<!-- Add a screenshot of the chat UI here, ideally showing an escalation or a memory follow-up.
-     Save the image (e.g. docs/screenshot.png) and uncomment the line below:
-![PayHash chat interface](docs/screenshot.png)
--->
 
 ## Evaluation
 
